@@ -17,14 +17,15 @@ func normalizeSegment(segment uniseg.Segment) []byte {
 		return nil
 	}
 	switch segment.Category {
-	case uniseg.UnicodeNd, uniseg.UnicodeNl, uniseg.UnicodeNo:
+	case uniseg.UnicodeNd:
 		if segment.RuneCount <= 7 {
 			return normalizeN(segment.Segment)
 		}
 	case uniseg.WordAllLower, uniseg.UnicodeLl:
 		return normalizeLlWl(segment.Segment)
 	case uniseg.WordFirstUpper, uniseg.WordAllUpper, uniseg.WordMixedLetters,
-		uniseg.UnicodeLm, uniseg.UnicodeLo, uniseg.UnicodeLt, uniseg.UnicodeLu:
+		uniseg.UnicodeLm, uniseg.UnicodeLo, uniseg.UnicodeLt, uniseg.UnicodeLu,
+		uniseg.UnicodeNl, uniseg.UnicodeNo:
 		return normalizeWfWaWmLmLoLtLu(segment.Segment)
 	}
 	return nil
