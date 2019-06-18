@@ -86,6 +86,7 @@ func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
 					if maxIDs > 0 && len(newData)>>3 > maxIDs {
 						results := ((*[(1 << 31) - 1]Result)(unsafe.Pointer(&newData[0])))[:len(newData)>>3]
 						sort.Slice(results, func(i, j int) bool {
+							// TODO: cmp ID
 							return results[i].Score > results[j].Score
 						})
 						newData = newData[:maxIDs]

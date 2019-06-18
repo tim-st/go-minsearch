@@ -19,7 +19,7 @@ func normalizeSegment(segment uniseg.Segment) []byte {
 	switch segment.Category {
 	case uniseg.UnicodeNd:
 		if segment.RuneCount <= 7 {
-			return normalizeN(segment.Segment)
+			return normalizeNd(segment.Segment)
 		}
 	case uniseg.WordAllLower, uniseg.UnicodeLl:
 		return normalizeLlWl(segment.Segment)
@@ -31,7 +31,7 @@ func normalizeSegment(segment uniseg.Segment) []byte {
 	return nil
 }
 
-func normalizeN(n []byte) []byte {
+func normalizeNd(n []byte) []byte {
 	if len(bytes.TrimLeftFunc(n, func(r rune) bool {
 		switch {
 		case r >= '0' && r <= '9':

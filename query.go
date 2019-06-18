@@ -56,6 +56,9 @@ func (f *File) Search(query []byte, setOp SetOperation, maxResults int) ([]Resul
 				union(data, qr, maxResults)
 			case Intersection:
 				intersection(data, qr, maxResults, isFirst)
+				if len(qr) == 0 {
+					return nil
+				}
 			}
 			isFirst = false
 		}
