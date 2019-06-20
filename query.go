@@ -5,7 +5,6 @@ import (
 	"unsafe"
 
 	"github.com/boltdb/bolt"
-
 	"github.com/tim-st/go-uniseg"
 )
 
@@ -44,7 +43,6 @@ func (f *File) Search(query []byte, setOp SetOperation, maxResults int) ([]Resul
 	err := f.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte{bucketWords})
 		segments := uniseg.Segments(query)
-		isFirst := true
 		for _, segment := range segments {
 			element := normalizeSegment(segment)
 			if len(element) == 0 {
@@ -55,16 +53,20 @@ func (f *File) Search(query []byte, setOp SetOperation, maxResults int) ([]Resul
 			case Union:
 				union(data, qr, maxResults)
 			case Intersection:
-				intersection(data, qr, maxResults, isFirst)
+				intersection(data, qr, maxResults)
 				if len(qr) == 0 {
 					return nil
 				}
 			}
-			isFirst = false
 		}
 		return nil
 	})
-	return sortedResults(qr), err
+	var results = make([]Result, 0, len(qr))
+	for id, score := range qr {
+		results = append(results, Result{ID: id, Score: score})
+	}
+	sortResults(results)
+	return results, err
 }
 
 func union(data []byte, qr map[ID]Score, maxResults int) {
@@ -78,8 +80,9 @@ func union(data []byte, qr map[ID]Score, maxResults int) {
 	}
 }
 
-func intersection(data []byte, qr map[ID]Score, maxResults int, isFirst bool) {
+func intersection(data []byte, qr map[ID]Score, maxResults int) {
 	numberIDs := Score(len(data) >> 3)
+	isFirst := len(qr) == 0
 	for i := 0; i < len(data); i += sizePair {
 		r := (*Result)(unsafe.Pointer(&data[i]))
 		if prevScore, currentIDExists := qr[r.ID]; currentIDExists ||
@@ -97,18 +100,13 @@ func intersection(data []byte, qr map[ID]Score, maxResults int, isFirst bool) {
 	}
 }
 
-func sortedResults(qr map[ID]Score) []Result {
-	var result = make([]Result, 0, len(qr))
-	for id, score := range qr {
-		result = append(result, Result{ID: id, Score: score})
-	}
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].Score == result[j].Score {
-			return result[i].ID < result[j].ID
+func sortResults(results []Result) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].ID < results[j].ID
 		}
-		return result[i].Score > result[j].Score // reversed
+		return results[i].Score > results[j].Score // reversed
 	})
-	return result
 }
 
 // TODO: suggest keys by edit distance

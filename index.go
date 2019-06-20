@@ -3,7 +3,6 @@ package minsearch
 import (
 	"encoding/binary"
 	"math"
-	"sort"
 	"unsafe"
 
 	"github.com/boltdb/bolt"
@@ -35,8 +34,8 @@ func (f *File) IndexPair(pair Pair, maxIDs int) error {
 // IndexBatch indexes all relevant segments for each Pair as a batch operation.
 // See IndexPair for more information.
 func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
-	var relevantSegments = make(map[string]Score)
 	return f.db.Update(func(tx *bolt.Tx) error {
+		relevantSegments := make(map[string]Score)
 		bucket := tx.Bucket([]byte{bucketWords})
 		for _, pair := range pairs {
 			// idiom optimized by compiler since go 1.11
@@ -72,8 +71,7 @@ func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
 					binary.LittleEndian.PutUint32(
 						newData[len(keyData)+sizeID:len(keyData)+sizePair], math.Float32bits(score))
 				} else {
-					prevScore := math.Float32frombits(binary.LittleEndian.Uint32(
-						keyData[targetIDIndex+sizeID : targetIDIndex+sizePair]))
+					prevScore := *(*Score)(unsafe.Pointer(&keyData[targetIDIndex+sizeID]))
 					if prevScore < score {
 						newData = make([]byte, len(keyData))
 						copy(newData, keyData)
@@ -85,13 +83,8 @@ func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
 				if len(newData) > 0 {
 					if maxIDs > 0 && len(newData)>>3 > maxIDs {
 						results := ((*[(1 << 31) - 1]Result)(unsafe.Pointer(&newData[0])))[:len(newData)>>3]
-						sort.Slice(results, func(i, j int) bool {
-							if results[i].Score == results[j].Score {
-								return results[i].ID < results[j].ID
-							}
-							return results[i].Score > results[j].Score
-						})
-						newData = newData[:maxIDs]
+						sortResults(results)
+						newData = newData[:maxIDs<<3]
 					}
 					if err := bucket.Put([]byte(element), newData); err != nil {
 						return err
