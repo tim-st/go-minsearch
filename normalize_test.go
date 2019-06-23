@@ -1,22 +1,44 @@
 package minsearch
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/tim-st/go-uniseg"
 )
 
 func normalizeString(s string) string {
-	return string(normalizeSegment(uniseg.Segments([]byte(s))[0]))
+	segments := uniseg.Segments([]byte(s))
+	result := make([]byte, 0, len(s))
+	for _, segment := range segments {
+		result = append(result, normalizeSegment(segment)...)
+		result = append(result, '|')
+	}
+	result = bytes.TrimRight(result, "|")
+	return string(result)
 }
 
 func TestNormalize(t *testing.T) {
 	var tests = map[string]string{
-		"¼":        "1/4",
-		"²":        "2",
-		"Änderung": "aenderung",
-		"Café":     "cafe",
-		"Straße":   "strasse",
+		"":            "",
+		"0":           "0",
+		"1234567":     "1234567",
+		"12345678":    "",
+		"¼":           "1/4",
+		"²":           "2",
+		"1A":          "1|a",
+		"100jähriges": "100|jaehriges",
+		"ä":           "ae",
+		"Ä":           "ae",
+		"ABC":         "abc",
+		"aBc":         "abc",
+		"AbC":         "abc",
+		"Änderung":    "aenderung",
+		"Café":        "cafe",
+		"ß":           "ss",
+		"ẞ":           "ss",
+		"Straße":      "strasse",
+		"Test":        "test",
 	}
 
 	for input, expected := range tests {
