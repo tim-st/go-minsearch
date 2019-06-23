@@ -1,10 +1,6 @@
 package minsearch
 
 import (
-	"encoding/binary"
-	"math"
-	"unsafe"
-
 	"github.com/boltdb/bolt"
 	"github.com/tim-st/go-uniseg"
 )
@@ -17,7 +13,7 @@ type Pair struct {
 
 // IndexPair indexes all relevant segments of the given Pair.
 // If maxIDs > 0 each indexed segment will only have up to maxIDs
-// different (ID, Score) pairs and only the highest are chosen.
+// different (ID, Score) pairs and only the highest scores are chosen.
 // If maxIDs > 0 and the value is chosen too small,
 // the results could become too bad.
 // Maybe maxIDs in [1000, 10000] is a good choice that limits
@@ -49,44 +45,44 @@ func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
 				}
 			}
 
+			const idNotFound = -1
 			segmentsLen := Score(len(segments))
-
 			for element, count := range relevantSegments {
 				score := 1 + (count / segmentsLen)
-				keyData := bucket.Get([]byte(element))
-				var targetIDIndex = -1
-				for i := 0; i < len(keyData); i += sizePair {
-					currentID := ID(binary.LittleEndian.Uint32(keyData[i : i+sizeID]))
-					if currentID == pair.ID {
-						targetIDIndex = i
+				oldResultsData := bucket.Get([]byte(element))
+				oldResults := asResults(oldResultsData)
+
+				var targetIDIndex = idNotFound
+				for idx, r := range oldResults {
+					if r.ID == pair.ID {
+						targetIDIndex = idx
 						break
 					}
 				}
-				var newData []byte
-				if targetIDIndex == -1 {
-					newData = make([]byte, len(keyData)+sizePair)
-					copy(newData, keyData)
-					binary.LittleEndian.PutUint32(
-						newData[len(keyData):len(keyData)+sizeID], pair.ID)
-					binary.LittleEndian.PutUint32(
-						newData[len(keyData)+sizeID:len(keyData)+sizePair], math.Float32bits(score))
-				} else {
-					prevScore := *(*Score)(unsafe.Pointer(&keyData[targetIDIndex+sizeID]))
-					if prevScore < score {
-						newData = make([]byte, len(keyData))
-						copy(newData, keyData)
-						binary.LittleEndian.PutUint32(
-							newData[targetIDIndex+sizeID:targetIDIndex+sizePair], math.Float32bits(score))
+
+				var newResultsData []byte
+				if targetIDIndex == idNotFound {
+					if maxIDs <= 0 || len(oldResultsData) <= (maxIDs<<3) {
+						newResultsData = make([]byte, len(oldResultsData)+sizeResult)
+						copy(newResultsData, oldResultsData)
+						newResults := asResults(newResultsData)
+						newResults[len(newResults)-1].ID = pair.ID
+						newResults[len(newResults)-1].Score = score
 					}
+				} else if prevScore := oldResults[targetIDIndex].Score; score > prevScore {
+					newResultsData = make([]byte, len(oldResultsData))
+					copy(newResultsData, oldResultsData)
+					newResults := asResults(newResultsData)
+					newResults[targetIDIndex].Score = score
 				}
 
-				if len(newData) > 0 {
-					if maxIDs > 0 && len(newData)>>3 > maxIDs {
-						results := ((*[(1 << 31) - 1]Result)(unsafe.Pointer(&newData[0])))[:len(newData)>>3]
+				if len(newResultsData) > 0 {
+					if maxIDs > 0 && len(newResultsData) > (maxIDs<<3) {
+						results := asResults(newResultsData)
 						sortResults(results)
-						newData = newData[:maxIDs<<3]
+						newResultsData = newResultsData[:len(newResultsData)-sizeResult] // remove last result
 					}
-					if err := bucket.Put([]byte(element), newData); err != nil {
+					if err := bucket.Put([]byte(element), newResultsData); err != nil {
 						return err
 					}
 				}

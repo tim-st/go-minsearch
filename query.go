@@ -48,12 +48,12 @@ func (f *File) Search(query []byte, setOp SetOperation, maxResults int) ([]Resul
 			if len(element) == 0 {
 				continue
 			}
-			data := bucket.Get(element)
+			results := asResults(bucket.Get(element))
 			switch setOp {
 			case Union:
-				union(data, qr, maxResults)
+				union(results, qr, maxResults)
 			case Intersection:
-				intersection(data, qr, maxResults)
+				intersection(results, qr, maxResults)
 				if len(qr) == 0 {
 					return nil
 				}
@@ -69,28 +69,26 @@ func (f *File) Search(query []byte, setOp SetOperation, maxResults int) ([]Resul
 	return results, err
 }
 
-func union(data []byte, qr map[ID]Score, maxResults int) {
-	numberIDs := Score(len(data) >> 3)
-	for i := 0; i < len(data); i += sizePair {
+func union(results []Result, qr map[ID]Score, maxResults int) {
+	numberIDs := Score(len(results))
+	for _, r := range results {
 		if maxResults < 1 || len(qr) < maxResults {
-			r := (*Result)(unsafe.Pointer(&data[i]))
-			currentScore := 1 + r.Score/numberIDs
-			qr[r.ID] += currentScore
+			qr[r.ID] += 1 + r.Score/numberIDs
 		}
 	}
 }
 
-func intersection(data []byte, qr map[ID]Score, maxResults int) {
-	numberIDs := Score(len(data) >> 3)
+func intersection(results []Result, qr map[ID]Score, maxResults int) {
 	isFirst := len(qr) == 0
-	for i := 0; i < len(data); i += sizePair {
-		r := (*Result)(unsafe.Pointer(&data[i]))
+	numberIDs := Score(len(results))
+	for _, r := range results {
 		if prevScore, currentIDExists := qr[r.ID]; currentIDExists ||
 			(isFirst && (maxResults < 1 || len(qr) < maxResults)) {
 			currentScore := 1 + r.Score/numberIDs
 			qr[r.ID] = (prevScore + currentScore) * -1 // mark as matched again
 		}
 	}
+
 	for id, score := range qr {
 		if score >= 0 {
 			delete(qr, id) // didn't match in last round: delete from set
@@ -98,6 +96,18 @@ func intersection(data []byte, qr map[ID]Score, maxResults int) {
 			qr[id] *= -1 // unmark the matched elements
 		}
 	}
+}
+
+// asResults casts the given byte slice to a Result slice.
+// The Result slice will have an incorrect capacity value,
+// so appending to the Result slice is not allowed!
+// Modifying the Result slice is ok, if modifying the
+// byte slice is ok.
+func asResults(data []byte) []Result {
+	if len(data) == 0 {
+		return nil
+	}
+	return ((*[(1 << 31) - 1]Result)(unsafe.Pointer(&data[0])))[:len(data)>>3]
 }
 
 func sortResults(results []Result) {

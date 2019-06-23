@@ -17,7 +17,7 @@ type Score = float32
 
 const sizeID = 4
 const sizeScore = 4
-const sizePair = sizeID + sizeScore
+const sizeResult = sizeID + sizeScore
 
 const (
 	bucketStats byte = iota
