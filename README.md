@@ -4,64 +4,22 @@ Package `minsearch` implements a minimal solution to index text and retrieve sea
 
 Documentation at <https://godoc.org/github.com/tim-st/go-minsearch>.
 
-Download package `minsearch` with `go get -u github.com/tim-st/go-minsearch/...`
+Download and install package `minsearch` and its tools with `go get -u github.com/tim-st/go-minsearch/...`
 
-## Example
+## Commands
 
-```go
-package main
+### wikiindex
 
-import (
-	"fmt"
-	"log"
+`wikiindex` can create a full text index of a MediaWiki `xml.bz2` dump file. The indexing process is interruptable.
 
-	"github.com/tim-st/go-minsearch"
-)
+#### Indexing Example
 
-func main() {
-	const noSync = true
-	index, indexErr := minsearch.Open("index.idx", noSync)
-	if indexErr != nil {
-		log.Fatal(indexErr)
-	}
+`wikiindex -filename="dewiki-20190601-pages-articles.xml.bz2" -fullText -idLimit=1000 -noSync`
 
-	var texts = [...]string{
-		"First text to index", // "first", "text", "to", "index"
-		"Second text 2.",      // "second", "text", "2"
-		"third-",               // "third"
-		"...",
-	}
+### wikisearch
 
-	maxDifferentIDsPerKeySegment := 1000 // 0 = unlimited = max file size
+`wikisearch` can print sorted search results of a query searched in an indexed file created by `wikiindex`.
 
-	for i := 0; i < 10000; i++ {
-		id := i % 120 // ID can be derived from unique position or FNV hash etc.
-		text := texts[i%4]
-		// better: index.IndexBatch(...)
-		err := index.IndexPair(minsearch.Pair{
-			ID:   uint32(id),
-			Text: []byte(text),
-		}, maxDifferentIDsPerKeySegment)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+#### Search Example
 
-	_ = index.UpdateStatistics() // not required
-
-	maxResultsDuringCalculation := 0 // unlimited
-
-	results, queryErr := index.Search([]byte("First Text"), minsearch.Union, maxResultsDuringCalculation)
-	// results is sorted by score
-
-	if queryErr != nil {
-		log.Fatal(queryErr)
-	}
-
-	for idx, result := range results {
-		// you have to store semantics about result.ID on your own.
-		fmt.Println(idx, result.ID, result.Score)
-	}
-
-}
-```
+`wikisearch -filename="dewiki-20190601-pages-articles.xml.bz2.idx" -intersection -limit=10 -query="word1 word2 word3..."`
