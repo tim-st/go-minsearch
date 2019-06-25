@@ -45,43 +45,65 @@ func (f *File) IndexBatch(pairs []Pair, maxIDs int) error {
 				}
 			}
 
-			const idNotFound = -1
+			const idxNotFound = -1
 			segmentsLen := Score(len(segments))
 			for element, count := range relevantSegments {
-				score := 1 + (count / segmentsLen)
 				oldResultsData := bucket.Get([]byte(element))
 				oldResults := asResults(oldResultsData)
+				score := 1 + (count / segmentsLen)
 
-				var targetIDIndex = idNotFound
+				if maxIDs > 0 && len(oldResults) >= maxIDs && oldResults[len(oldResults)-1].Score > score {
+					continue
+				}
+
+				var oldResultIdx = idxNotFound
+				var newResultIdx = idxNotFound
 				for idx, r := range oldResults {
+
+					if newResultIdx == idxNotFound && (score > r.Score ||
+						(score == r.Score && pair.ID < r.ID)) {
+						newResultIdx = idx
+					}
+
 					if r.ID == pair.ID {
-						targetIDIndex = idx
+						oldResultIdx = idx
 						break
 					}
+
+				}
+
+				if newResultIdx == idxNotFound {
+					newResultIdx = len(oldResults)
 				}
 
 				var newResultsData []byte
-				if targetIDIndex == idNotFound {
-					if maxIDs <= 0 || len(oldResultsData) <= (maxIDs<<3) {
-						newResultsData = make([]byte, len(oldResultsData)+sizeResult)
-						copy(newResultsData, oldResultsData)
-						newResults := asResults(newResultsData)
-						newResults[len(newResults)-1].ID = pair.ID
-						newResults[len(newResults)-1].Score = score
-					}
-				} else if prevScore := oldResults[targetIDIndex].Score; score > prevScore {
-					newResultsData = make([]byte, len(oldResultsData))
-					copy(newResultsData, oldResultsData)
+				if oldResultIdx == idxNotFound {
+
+					newResultsData = make([]byte, len(oldResultsData)+sizeResult)
 					newResults := asResults(newResultsData)
-					newResults[targetIDIndex].Score = score
+
+					copy(newResults, oldResults[:newResultIdx])
+					newResults[newResultIdx].ID = pair.ID
+					newResults[newResultIdx].Score = score
+					copy(newResults[newResultIdx+1:], oldResults[newResultIdx:])
+
+					if maxIDs > 0 && len(newResults) > maxIDs {
+						newResultsData = newResultsData[:len(newResultsData)-sizeResult] // remove last result
+					}
+
+				} else if prevScore := oldResults[oldResultIdx].Score; score > prevScore {
+					newResultsData = make([]byte, len(oldResultsData))
+					newResults := asResults(newResultsData)
+
+					copy(newResults, oldResults[:newResultIdx])
+					newResults[newResultIdx].ID = pair.ID
+					newResults[newResultIdx].Score = score
+					copy(newResults[newResultIdx+1:], oldResults[newResultIdx:oldResultIdx])
+					copy(newResults[oldResultIdx+1:], oldResults[oldResultIdx+1:])
+
 				}
 
 				if len(newResultsData) > 0 {
-					if maxIDs > 0 && len(newResultsData) > (maxIDs<<3) {
-						results := asResults(newResultsData)
-						sortResults(results)
-						newResultsData = newResultsData[:len(newResultsData)-sizeResult] // remove last result
-					}
 					if err := bucket.Put([]byte(element), newResultsData); err != nil {
 						return err
 					}
