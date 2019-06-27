@@ -16,9 +16,13 @@ Download and install package `minsearch` and its tools with `go get -u github.co
 
 `wikiindex -filename="dewiki-20190601-pages-articles.xml.bz2" -fullText -idLimit=1000 -noSync`
 
+creates an index file `dewiki-20190601-pages-articles.xml.bz2.idx` (file size: 3.00 GB; number segments: 13628084; avg number IDs per segment: 14.05).
+
 ### wikisearch
 
 `wikisearch` can print sorted search results of a query searched in an indexed file created by `wikiindex`.
+
+The ID in the search results is the page ID used by the MediaWiki (`hostname/w/index.php?curid=ID`).
 
 #### Search Example
 
