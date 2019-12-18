@@ -107,7 +107,7 @@ func asResults(data []byte) []Result {
 	if len(data) == 0 {
 		return nil
 	}
-	return ((*[(1 << 31) - 1]Result)(unsafe.Pointer(&data[0])))[:len(data)>>3]
+	return ((*[1 << 27]Result)(unsafe.Pointer(&data[0])))[:len(data)>>3]
 }
 
 func sortResults(results []Result) {
